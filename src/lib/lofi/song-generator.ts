@@ -701,7 +701,7 @@ function generateDrums(
           velocity: Math.max(0.2, Math.min(1, v)),
         });
       }
-      if (pat.hihat[step] > 0 && (!thinOut || rng.chance(1 - thinProb))) {
+      if (pat.hihat[step] > 0) {
         const v =
           pat.hihat[step] *
           (1 + preset.hihatVolume / 20);

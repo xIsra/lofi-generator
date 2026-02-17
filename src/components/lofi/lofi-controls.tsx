@@ -20,7 +20,10 @@ function getWarmthLabel(cutoff: number): string {
   if (cutoff < 2500) {
     return "balanced";
   }
-  return "bright";
+  if (cutoff < 4000) {
+    return "bright";
+  }
+  return "crisp";
 }
 
 interface LofiControlsProps {

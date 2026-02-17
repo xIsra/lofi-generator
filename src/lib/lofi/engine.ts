@@ -79,6 +79,7 @@ export class LofiEngine {
   private readonly compressor: InstanceType<typeof Tone.Compressor>;
   private readonly crackleGain: InstanceType<typeof Tone.Gain>;
   private readonly drumComp: InstanceType<typeof Tone.Compressor>;
+  private readonly drumFilter: InstanceType<typeof Tone.Filter>;
   private readonly snareFilter: InstanceType<typeof Tone.Filter>;
   private readonly hihatFilter: InstanceType<typeof Tone.Filter>;
 
@@ -188,10 +189,16 @@ export class LofiEngine {
       volume: -7,
     }).connect(this.filter);
 
+    this.drumFilter = new Tone.Filter({
+      frequency: 1200,
+      type: "lowpass",
+      rolloff: -12,
+    }).connect(this.drumReverb);
+
     this.drumComp = new Tone.Compressor({
       threshold: -20,
       ratio: 3,
-    }).connect(this.drumReverb);
+    }).connect(this.drumFilter);
 
     this.kick = new Tone.MembraneSynth({
       envelope: { attack: 0.01, decay: 0.3, sustain: 0 },
@@ -349,6 +356,7 @@ export class LofiEngine {
   private applyParamOverrides(): void {
     this.transport.bpm.value = this.params.tempo;
     this.filter.frequency.value = this.params.filterCutoff;
+    this.drumFilter.frequency.value = this.params.filterCutoff;
     this.reverb.wet.value = this.params.reverbMix;
     this.drumReverb.wet.value = this.params.reverbMix * 0.9;
     this.delay.wet.value = this.params.delayMix;
@@ -433,6 +441,7 @@ export class LofiEngine {
     this.drumReverb.wet.value = fx.reverbMix * 0.9;
     this.delay.wet.value = fx.delayMix;
     this.filter.frequency.value = fx.filterCutoff;
+    this.drumFilter.frequency.value = fx.filterCutoff;
     /* crackleGain set only by user's crackle slider via applyParamOverrides */
   }
 
