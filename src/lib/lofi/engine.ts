@@ -50,7 +50,9 @@ export class LofiEngine {
   private readonly kick: InstanceType<typeof Tone.MembraneSynth>;
   private readonly snare: InstanceType<typeof Tone.NoiseSynth>;
   private readonly hihat: InstanceType<typeof Tone.NoiseSynth>;
-  private readonly crackle: InstanceType<typeof Tone.Noise>;
+  private readonly crackle: InstanceType<typeof Tone.NoiseSynth>;
+  private readonly crackleBg: InstanceType<typeof Tone.Noise>;
+  private readonly crackleLowpass: InstanceType<typeof Tone.Filter>;
   private readonly filter: InstanceType<typeof Tone.Filter>;
   private readonly reverb: InstanceType<typeof Tone.Reverb>;
   private readonly drumReverb: InstanceType<typeof Tone.Reverb>;
@@ -128,7 +130,7 @@ export class LofiEngine {
     this.subbass = new Tone.MonoSynth({
       oscillator: { type: "sine" },
       envelope: { attack: 0.01, decay: 0.2, sustain: 0.8, release: 0.4 },
-      volume: -3,
+      volume: -6,
     }).connect(this.filter);
 
     this.piano = new Tone.PolySynth(Tone.FMSynth, {
@@ -163,7 +165,7 @@ export class LofiEngine {
     this.contrabass = new Tone.MonoSynth({
       oscillator: { type: "triangle" },
       envelope: { attack: 0.05, decay: 0.3, sustain: 0.5, release: 0.6 },
-      volume: -4,
+      volume: -7,
     }).connect(this.filter);
 
     this.drumComp = new Tone.Compressor({
@@ -204,14 +206,24 @@ export class LofiEngine {
     }).connect(this.hihatFilter);
 
     const crackleFilter = new Tone.Filter({
-      frequency: 4600,
+      frequency: 3200,
       type: "bandpass",
-      Q: 0.5,
+      Q: 0.6,
     });
+    this.crackleLowpass = new Tone.Filter({
+      frequency: 2200,
+      type: "lowpass",
+      rolloff: -12,
+    }).connect(crackleFilter);
     this.crackleGain = new Tone.Gain(0.08).connect(this.compressor);
-    this.crackle = new Tone.Noise({ type: "brown", volume: -24 })
-      .connect(crackleFilter)
-      .connect(this.crackleGain);
+    crackleFilter.connect(this.crackleGain);
+    this.crackleBg = new Tone.Noise({ type: "white", volume: -28 })
+      .connect(this.crackleLowpass);
+    this.crackle = new Tone.NoiseSynth({
+      noise: { type: "pink" },
+      envelope: { attack: 0.001, decay: 0.04, sustain: 0 },
+      volume: -12,
+    }).connect(crackleFilter);
   }
 
   async init(): Promise<void> {
@@ -223,8 +235,8 @@ export class LofiEngine {
     if (this.currentSong && seed === undefined) {
       this.masterGain.gain.cancelScheduledValues(0);
       this.masterGain.gain.value = this.params.volume;
+      this.crackleBg.start();
       this.transport.start();
-      this.crackle.start();
       return;
     }
     const song = generateSong(seed ?? Date.now());
@@ -236,7 +248,7 @@ export class LofiEngine {
     this.currentSong = null;
     this.currentSectionName = "";
     this.transport.stop();
-    this.crackle.stop();
+    this.crackleBg.stop();
     this.pad.releaseAll();
     this.melody.triggerRelease();
     this.bass.triggerRelease();
@@ -251,7 +263,7 @@ export class LofiEngine {
 
   stop(): void {
     this.transport.stop();
-    this.crackle.stop();
+    this.crackleBg.stop();
     this.masterGain.gain.cancelScheduledValues(0);
     this.masterGain.gain.value = 0;
     this.pad.releaseAll();
@@ -320,6 +332,8 @@ export class LofiEngine {
     this.snare.dispose();
     this.hihat.dispose();
     this.crackle.dispose();
+    this.crackleBg.dispose();
+    this.crackleLowpass.dispose();
     this.filter.dispose();
     this.reverb.dispose();
     this.drumReverb.dispose();
@@ -344,7 +358,7 @@ export class LofiEngine {
     this.pad.set(preset.pad.options as object);
     this.melody.set(preset.melody.options as object);
     this.bass.set(preset.bass.options as object);
-    this.bass.volume.value = preset.bass.volume;
+    this.bass.volume.value = preset.bass.volume - 3;
   }
 
   private configureFX(fx: GeneratedSong["fxParams"]): void {
@@ -354,7 +368,7 @@ export class LofiEngine {
     this.drumReverb.wet.value = fx.reverbMix * 0.9;
     this.delay.wet.value = fx.delayMix;
     this.filter.frequency.value = fx.filterCutoff;
-    this.crackleGain.gain.value = fx.crackleMix;
+    /* crackleGain set only by user's crackle slider via applyParamOverrides */
   }
 
   private playSong(song: GeneratedSong): void {
@@ -475,10 +489,25 @@ export class LofiEngine {
     );
     this.scheduledIds.push(barUpdateId);
 
+    const crackleId = this.transport.scheduleRepeat(
+      (time) => {
+        const r = Math.random();
+        if (r < 0.65) {
+          const isTick = r < 0.4;
+          const dur = isTick ? 0.008 + Math.random() * 0.012 : 0.02 + Math.random() * 0.05;
+          const vel = isTick ? 0.2 + Math.random() * 0.35 : 0.45 + Math.random() * 0.5;
+          this.crackle.triggerAttackRelease(dur, time, vel);
+        }
+      },
+      "32n",
+      "0:0:0"
+    );
+    this.scheduledIds.push(crackleId);
+
     const nextSongId = this.transport.schedule(() => {
       this.transport.stop();
       this.clearScheduled();
-      this.crackle.stop();
+      this.crackleBg.stop();
       this.pad.releaseAll();
       this.melody.triggerRelease();
       this.bass.triggerRelease();
@@ -497,7 +526,7 @@ export class LofiEngine {
     }, `${song.totalBars}:0:0`);
     this.scheduledIds.push(nextSongId);
 
-    this.crackle.start();
+    this.crackleBg.start();
     this.transport.start();
   }
 }
