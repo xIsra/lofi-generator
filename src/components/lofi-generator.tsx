@@ -17,6 +17,32 @@ function LofiGenerator() {
   const engineRef = useRef<LofiEngine | null>(null);
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
 
+  const stopRef = useRef<(() => void) | null>(null);
+  stopRef.current = () => {
+    if (isPlaying) {
+      engineRef.current?.stop();
+      setIsPlaying(false);
+    }
+  };
+
+  const playRef = useRef<(() => void | Promise<void>) | null>(null);
+
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) {
+      return;
+    }
+    const stop = () => stopRef.current?.();
+    const play = () => playRef.current?.();
+    navigator.mediaSession.setActionHandler("stop", stop);
+    navigator.mediaSession.setActionHandler("pause", stop);
+    navigator.mediaSession.setActionHandler("play", play);
+    return () => {
+      navigator.mediaSession.setActionHandler("stop", null);
+      navigator.mediaSession.setActionHandler("pause", null);
+      navigator.mediaSession.setActionHandler("play", null);
+    };
+  }, []);
+
   useEffect(() => {
     if (!isPlaying) {
       setAnalyser(null);
@@ -68,7 +94,42 @@ function LofiGenerator() {
     }
     await engine.start();
     setIsPlaying(true);
+    if ("mediaSession" in navigator) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: "Lofi Generator",
+        artist: "lofi generator",
+        artwork: [
+          { src: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+          { src: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+        ],
+      });
+      navigator.mediaSession.playbackState = "playing";
+      if ("setPositionState" in navigator.mediaSession) {
+        navigator.mediaSession.        setPositionState({
+          duration: Number.POSITIVE_INFINITY,
+          playbackRate: 1,
+          position: 0,
+        });
+      }
+    }
   }, [isPlaying, params]);
+
+  useEffect(() => {
+    playRef.current = () => {
+      if (!isPlaying) {
+        handlePlayPause();
+      }
+    };
+  }, [isPlaying, handlePlayPause]);
+
+  useEffect(() => {
+    if ("mediaSession" in navigator && !isPlaying) {
+      navigator.mediaSession.playbackState = "none";
+      if ("setPositionState" in navigator.mediaSession) {
+        navigator.mediaSession.setPositionState({});
+      }
+    }
+  }, [isPlaying]);
 
   const handleRandomize = useCallback(() => {
     if (!engineRef.current) {
