@@ -170,10 +170,10 @@ function resolveChords(
     const voicing: { note: string; velocity: number }[] = [];
     for (let i = 0; i < chordNotes.length; i++) {
       const velCurve = CHORD_VELOCITIES[i] ?? 0.6;
-      const jitter = rng.gaussian(0, 0.04);
+      const jitter = rng.gaussian(0, 0.02);
       voicing.push({
         note: midiToName(chordNotes[i]),
-        velocity: Math.max(0.35, Math.min(1, baseVel * velCurve + jitter)),
+        velocity: Math.max(0.35, Math.min(0.65, baseVel * velCurve + jitter)),
       });
     }
 
@@ -638,13 +638,17 @@ function generateExtraInstrument(
       const time = isArpeggio
         ? `${sectionStartBar + bar}:${beat}:${rem}`
         : `${sectionStartBar + bar}:0:0`;
-      const vel =
-        instrumentId === "guitar" ? 0.45 + rng.gaussian(0, 0.06) : 0.4;
+      const baseVel =
+        instrumentId === "guitar" ? 0.45 : instrumentId === "violin" ? 0.38 : 0.4;
+      const vel = baseVel + (instrumentId === "guitar" ? rng.gaussian(0, 0.04) : 0);
       events.push({
         time,
         note: midiToName(midi),
         duration: instrumentId === "guitar" || isArpeggio ? "8n" : "1n",
-        velocity: Math.max(0.2, Math.min(0.6, vel)),
+        velocity: Math.max(
+          0.2,
+          Math.min(instrumentId === "violin" ? 0.52 : 0.6, vel)
+        ),
         instrument: instrumentId,
       });
     }
@@ -680,8 +684,7 @@ function generateDrums(
       if (pat.kick[step] > 0 && (!thinOut || rng.chance(1 - thinProb))) {
         const v =
           pat.kick[step] *
-          (preset.kickVolume / -6) *
-          (1 + rng.gaussian(0, 0.05));
+          (preset.kickVolume / -6);
         events.push({
           time,
           instrument: "kick",
@@ -691,8 +694,7 @@ function generateDrums(
       if (pat.snare[step] > 0 && (!thinOut || rng.chance(1 - thinProb))) {
         const v =
           pat.snare[step] *
-          (1 + preset.snareVolume / 20) *
-          (1 + rng.gaussian(0, 0.05));
+          (1 + preset.snareVolume / 20);
         events.push({
           time,
           instrument: "snare",
@@ -702,8 +704,7 @@ function generateDrums(
       if (pat.hihat[step] > 0 && (!thinOut || rng.chance(1 - thinProb))) {
         const v =
           pat.hihat[step] *
-          (1 + preset.hihatVolume / 20) *
-          (1 + rng.gaussian(0, 0.06));
+          (1 + preset.hihatVolume / 20);
         events.push({
           time,
           instrument: "hihat",

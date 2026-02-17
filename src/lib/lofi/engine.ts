@@ -53,10 +53,13 @@ export class LofiEngine {
   private readonly crackle: InstanceType<typeof Tone.Noise>;
   private readonly filter: InstanceType<typeof Tone.Filter>;
   private readonly reverb: InstanceType<typeof Tone.Reverb>;
+  private readonly drumReverb: InstanceType<typeof Tone.Reverb>;
   private readonly delay: InstanceType<typeof Tone.FeedbackDelay>;
   private readonly compressor: InstanceType<typeof Tone.Compressor>;
   private readonly crackleGain: InstanceType<typeof Tone.Gain>;
   private readonly drumComp: InstanceType<typeof Tone.Compressor>;
+  private readonly snareFilter: InstanceType<typeof Tone.Filter>;
+  private readonly hihatFilter: InstanceType<typeof Tone.Filter>;
 
   private currentSong: GeneratedSong | null = null;
   private scheduledIds: number[] = [];
@@ -68,10 +71,10 @@ export class LofiEngine {
     this.transport = Tone.getTransport();
     this.masterGain = new Tone.Gain(1).toDestination();
     this.compressor = new Tone.Compressor({
-      threshold: -24,
-      ratio: 4,
-      attack: 0.003,
-      release: 0.1,
+      threshold: -32,
+      ratio: 10,
+      attack: 0.1,
+      release: 0.5,
     }).connect(this.masterGain);
 
     this.delay = new Tone.FeedbackDelay({
@@ -86,6 +89,12 @@ export class LofiEngine {
       wet: 0.4,
     }).connect(this.delay);
 
+    this.drumReverb = new Tone.Reverb({
+      decay: 3,
+      preDelay: 0.01,
+      wet: 0.35,
+    }).connect(this.compressor);
+
     this.filter = new Tone.Filter({
       frequency: 1200,
       type: "lowpass",
@@ -94,9 +103,10 @@ export class LofiEngine {
 
     this.pad = new Tone.PolySynth(Tone.FMSynth, {
       harmonicity: 2,
-      modulationIndex: 2,
+      modulationIndex: 1.8,
       oscillator: { type: "sine" },
-      envelope: { attack: 0.3, decay: 0.2, sustain: 0.6, release: 1.5 },
+      envelope: { attack: 0.45, decay: 0.25, sustain: 0.55, release: 1.6 },
+      volume: -14,
     }).connect(this.filter);
 
     this.melody = new Tone.Synth({
@@ -130,9 +140,9 @@ export class LofiEngine {
     }).connect(this.filter);
 
     this.violin = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: "sawtooth" },
-      envelope: { attack: 0.3, decay: 0.2, sustain: 0.6, release: 1.2 },
-      volume: -8,
+      oscillator: { type: "triangle" },
+      envelope: { attack: 0.35, decay: 0.25, sustain: 0.5, release: 1.2 },
+      volume: -14,
     }).connect(this.filter);
 
     this.trumpet = new Tone.PolySynth(Tone.FMSynth, {
@@ -156,31 +166,45 @@ export class LofiEngine {
       volume: -4,
     }).connect(this.filter);
 
-    this.kick = new Tone.MembraneSynth({
-      envelope: { attack: 0.01, decay: 0.3, sustain: 0 },
-      octaves: 8,
-      pitchDecay: 0.05,
-    }).connect(this.filter);
-
     this.drumComp = new Tone.Compressor({
       threshold: -20,
       ratio: 3,
-    }).connect(this.compressor);
+    }).connect(this.drumReverb);
+
+    this.kick = new Tone.MembraneSynth({
+      envelope: { attack: 0.01, decay: 0.3, sustain: 0 },
+      octaves: 4,
+      pitchDecay: 0.05,
+    }).connect(this.drumComp);
+
+    this.snareFilter = new Tone.Filter({
+      frequency: 1200,
+      type: "bandpass",
+      Q: 2,
+      rolloff: -12,
+    }).connect(this.drumComp);
+
+    this.hihatFilter = new Tone.Filter({
+      frequency: 3200,
+      type: "bandpass",
+      Q: 1.2,
+      rolloff: -12,
+    }).connect(this.drumComp);
 
     this.snare = new Tone.NoiseSynth({
-      noise: { type: "white" },
-      envelope: { attack: 0.001, decay: 0.2, sustain: 0 },
-      volume: -6,
-    }).connect(this.drumComp);
+      noise: { type: "pink" },
+      envelope: { attack: 0.002, decay: 0.22, sustain: 0 },
+      volume: 0,
+    }).connect(this.snareFilter);
 
     this.hihat = new Tone.NoiseSynth({
       noise: { type: "white" },
-      envelope: { attack: 0.001, decay: 0.06, sustain: 0 },
-      volume: -10,
-    }).connect(this.drumComp);
+      envelope: { attack: 0.001, decay: 0.04, sustain: 0 },
+      volume: -5,
+    }).connect(this.hihatFilter);
 
     const crackleFilter = new Tone.Filter({
-      frequency: 4000,
+      frequency: 4600,
       type: "bandpass",
       Q: 0.5,
     });
@@ -191,7 +215,7 @@ export class LofiEngine {
   }
 
   async init(): Promise<void> {
-    await this.reverb.ready;
+    await Promise.all([this.reverb.ready, this.drumReverb.ready]);
   }
 
   async start(seed?: number): Promise<void> {
@@ -251,6 +275,7 @@ export class LofiEngine {
     this.transport.bpm.value = this.params.tempo;
     this.filter.frequency.value = this.params.filterCutoff;
     this.reverb.wet.value = this.params.reverbMix;
+    this.drumReverb.wet.value = this.params.reverbMix * 0.9;
     this.delay.wet.value = this.params.delayMix;
     this.crackleGain.gain.value = this.params.crackleMix;
     if (this.masterGain.gain.value > 0) {
@@ -293,10 +318,13 @@ export class LofiEngine {
     this.crackle.dispose();
     this.filter.dispose();
     this.reverb.dispose();
+    this.drumReverb.dispose();
     this.delay.dispose();
     this.compressor.dispose();
     this.crackleGain.dispose();
     this.drumComp.dispose();
+    this.snareFilter.dispose();
+    this.hihatFilter.dispose();
     this.masterGain.dispose();
   }
 
@@ -318,6 +346,8 @@ export class LofiEngine {
   private configureFX(fx: GeneratedSong["fxParams"]): void {
     this.reverb.decay = fx.reverbDecay;
     this.reverb.wet.value = fx.reverbMix;
+    this.drumReverb.decay = fx.reverbDecay * 0.85;
+    this.drumReverb.wet.value = fx.reverbMix * 0.9;
     this.delay.wet.value = fx.delayMix;
     this.filter.frequency.value = fx.filterCutoff;
     this.crackleGain.gain.value = fx.crackleMix;
