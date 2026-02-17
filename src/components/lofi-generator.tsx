@@ -1,6 +1,7 @@
 import { Dices } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { start as startTone } from "tone";
+import { getContext, start as startTone } from "tone";
+import { AudioWaveVisualizer } from "@/components/lofi/audio-wave-visualizer";
 import { AuroraCanvas } from "@/components/lofi/aurora-canvas";
 import { LofiControls } from "@/components/lofi/lofi-controls";
 import { DEFAULT_PARAMS, LofiEngine, type LofiParams } from "@/lib/lofi/engine";
@@ -14,6 +15,25 @@ function LofiGenerator() {
     key: string;
   }>({ preset: "", section: "", key: "" });
   const engineRef = useRef<LofiEngine | null>(null);
+  const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
+
+  useEffect(() => {
+    if (!isPlaying) {
+      setAnalyser(null);
+      return;
+    }
+    if (!engineRef.current) {
+      return;
+    }
+    const ctx = getContext();
+    const node = ctx.createAnalyser();
+    engineRef.current.connectAnalyser(node);
+    setAnalyser(node);
+    return () => {
+      node.disconnect();
+      setAnalyser(null);
+    };
+  }, [isPlaying]);
 
   useEffect(() => {
     if (!(isPlaying && engineRef.current)) {
@@ -82,6 +102,11 @@ function LofiGenerator() {
               .join(" · ")}
           </p>
         )}
+        <AudioWaveVisualizer
+          analyser={analyser}
+          className="w-full max-w-md"
+          isPlaying={isPlaying}
+        />
         <div className="flex items-center gap-4">
           <button
             aria-label={isPlaying ? "Pause" : "Play"}

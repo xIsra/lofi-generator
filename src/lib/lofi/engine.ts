@@ -283,6 +283,10 @@ export class LofiEngine {
     }
   }
 
+  connectAnalyser(analyser: AnalyserNode): void {
+    this.masterGain.connect(analyser);
+  }
+
   getCurrentInfo(): {
     preset: string;
     section: string;
