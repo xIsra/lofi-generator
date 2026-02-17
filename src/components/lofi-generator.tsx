@@ -137,6 +137,15 @@ function LofiGenerator() {
         >
           xIsra
         </a>
+        {" · "}
+        <a
+          className="transition-colors hover:text-white/70"
+          href="https://github.com/xisra/lofi-generator"
+          rel="noopener noreferrer"
+          target="_blank"
+        >
+          check it on github
+        </a>
       </p>
     </div>
   );
