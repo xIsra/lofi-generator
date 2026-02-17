@@ -7,10 +7,28 @@ import type {
 } from "./song-generator";
 import { generateSong } from "./song-generator";
 
+export const INSTRUMENT_IDS = [
+  "pad",
+  "melody",
+  "bass",
+  "subbass",
+  "texture",
+  "piano",
+  "violin",
+  "trumpet",
+  "guitar",
+  "contrabass",
+  "kick",
+  "snare",
+  "hihat",
+] as const;
+export type InstrumentVolumeId = (typeof INSTRUMENT_IDS)[number];
+
 export interface LofiParams {
   crackleMix: number;
   delayMix: number;
   filterCutoff: number;
+  instrumentVolumes: Partial<Record<InstrumentVolumeId, number>>;
   reverbMix: number;
   tempo: number;
   volume: number;
@@ -31,6 +49,7 @@ export const DEFAULT_PARAMS: LofiParams = {
   filterCutoff: 1200,
   crackleMix: 0.08,
   delayMix: 0.15,
+  instrumentVolumes: {},
 };
 
 export class LofiEngine {
@@ -67,6 +86,7 @@ export class LofiEngine {
   private scheduledIds: number[] = [];
   private currentSectionName = "";
   private params: LofiParams = { ...DEFAULT_PARAMS };
+  private bassBaseVolume = -5;
   private readonly masterGain: InstanceType<typeof Tone.Gain>;
 
   constructor() {
@@ -217,8 +237,9 @@ export class LofiEngine {
     }).connect(crackleFilter);
     this.crackleGain = new Tone.Gain(0.08).connect(this.compressor);
     crackleFilter.connect(this.crackleGain);
-    this.crackleBg = new Tone.Noise({ type: "white", volume: -28 })
-      .connect(this.crackleLowpass);
+    this.crackleBg = new Tone.Noise({ type: "white", volume: -28 }).connect(
+      this.crackleLowpass
+    );
     this.crackle = new Tone.NoiseSynth({
       noise: { type: "pink" },
       envelope: { attack: 0.001, decay: 0.04, sustain: 0 },
@@ -283,6 +304,48 @@ export class LofiEngine {
     this.applyParamOverrides();
   }
 
+  private readonly baseVolumes: Record<InstrumentVolumeId, number> = {
+    pad: -14,
+    melody: 0,
+    bass: -5,
+    subbass: -6,
+    texture: -14,
+    piano: -5,
+    violin: -14,
+    trumpet: -6,
+    guitar: -5,
+    contrabass: -7,
+    kick: 0,
+    snare: 0,
+    hihat: -5,
+  };
+
+  private applyInstrumentVolumes(): void {
+    const vols = this.params.instrumentVolumes ?? {};
+    const dbFromSlider = (v: number) => (v / 100 - 1) * 24;
+    const set = (
+      id: InstrumentVolumeId,
+      synth: { volume: { value: number } }
+    ) => {
+      const base = id === "bass" ? this.bassBaseVolume : this.baseVolumes[id];
+      const slider = vols[id] ?? 100;
+      synth.volume.value = base + dbFromSlider(slider);
+    };
+    set("pad", this.pad);
+    set("melody", this.melody);
+    set("bass", this.bass);
+    set("subbass", this.subbass);
+    set("texture", this.texture);
+    set("piano", this.piano);
+    set("violin", this.violin);
+    set("trumpet", this.trumpet);
+    set("guitar", this.guitar);
+    set("contrabass", this.contrabass);
+    set("kick", this.kick);
+    set("snare", this.snare);
+    set("hihat", this.hihat);
+  }
+
   private applyParamOverrides(): void {
     this.transport.bpm.value = this.params.tempo;
     this.filter.frequency.value = this.params.filterCutoff;
@@ -290,6 +353,7 @@ export class LofiEngine {
     this.drumReverb.wet.value = this.params.reverbMix * 0.9;
     this.delay.wet.value = this.params.delayMix;
     this.crackleGain.gain.value = this.params.crackleMix;
+    this.applyInstrumentVolumes();
     if (this.masterGain.gain.value > 0) {
       this.masterGain.gain.value = this.params.volume;
     }
@@ -358,7 +422,8 @@ export class LofiEngine {
     this.pad.set(preset.pad.options as object);
     this.melody.set(preset.melody.options as object);
     this.bass.set(preset.bass.options as object);
-    this.bass.volume.value = preset.bass.volume - 3;
+    this.bassBaseVolume = preset.bass.volume - 3;
+    this.applyInstrumentVolumes();
   }
 
   private configureFX(fx: GeneratedSong["fxParams"]): void {
@@ -494,8 +559,12 @@ export class LofiEngine {
         const r = Math.random();
         if (r < 0.65) {
           const isTick = r < 0.4;
-          const dur = isTick ? 0.008 + Math.random() * 0.012 : 0.02 + Math.random() * 0.05;
-          const vel = isTick ? 0.2 + Math.random() * 0.35 : 0.45 + Math.random() * 0.5;
+          const dur = isTick
+            ? 0.008 + Math.random() * 0.012
+            : 0.02 + Math.random() * 0.05;
+          const vel = isTick
+            ? 0.2 + Math.random() * 0.35
+            : 0.45 + Math.random() * 0.5;
           this.crackle.triggerAttackRelease(dur, time, vel);
         }
       },

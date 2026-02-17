@@ -1,5 +1,16 @@
+import { ChevronDownIcon, RotateCcw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Slider } from "@/components/ui/slider";
-import { DEFAULT_PARAMS, type LofiParams } from "@/lib/lofi/engine";
+import {
+  DEFAULT_PARAMS,
+  INSTRUMENT_IDS,
+  type LofiParams,
+} from "@/lib/lofi/engine";
 import { cn } from "@/lib/utils";
 
 function getWarmthLabel(cutoff: number): string {
@@ -37,14 +48,26 @@ export function LofiControls({
   return (
     <div
       className={cn(
-        "w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-4 backdrop-blur-xl sm:px-6",
+        "relative w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-4 backdrop-blur-xl sm:px-8 sm:py-8",
         className
       )}
     >
-      {info && (
-        <p className="mb-3 truncate font-comfortaa font-light text-white/40 text-xs lowercase tracking-wide">
+      <Button
+        aria-label="Reset all controls"
+        className="absolute top-2 right-2 text-white/50 hover:bg-white/10 hover:text-white/70"
+        onClick={() => onParamsChange({ ...DEFAULT_PARAMS })}
+        size="icon-sm"
+        type="button"
+        variant="ghost"
+      >
+        <RotateCcw className="size-5" strokeWidth={1.25} />
+      </Button>
+      {info ? (
+        <p className="mb-3 truncate pr-10 font-comfortaa font-light text-white/40 text-xs lowercase tracking-wide">
           {info}
         </p>
+      ) : (
+        <div className="h-8" />
       )}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-6">
         <Control
@@ -96,6 +119,37 @@ export function LofiControls({
           value={`${Math.round(p.crackleMix * 100)}%`}
         />
       </div>
+      <Collapsible className="group/collapse mt-4">
+        <CollapsibleTrigger className="flex w-full items-center gap-1.5 rounded-md py-2 font-comfortaa font-light text-[13px] text-white/60 lowercase tracking-wide hover:text-white/80">
+          instruments
+          <ChevronDownIcon className="size-4 shrink-0 text-white/40 transition-transform group-data-[state=open]/collapse:rotate-180" />
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7">
+            {INSTRUMENT_IDS.map((id) => {
+              const vols = p.instrumentVolumes ?? {};
+              const val = vols[id] ?? 100;
+              return (
+                <Control
+                  className={SLIDER_CLASS}
+                  key={id}
+                  label={id}
+                  onChange={(v) =>
+                    onParamsChange({
+                      instrumentVolumes: {
+                        ...vols,
+                        [id]: v,
+                      },
+                    })
+                  }
+                  sliderValue={[val]}
+                  value={`${Math.round(val)}%`}
+                />
+              );
+            })}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
     </div>
   );
 }
