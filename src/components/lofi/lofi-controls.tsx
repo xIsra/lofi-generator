@@ -1,0 +1,132 @@
+import { Slider } from "@/components/ui/slider";
+import { DEFAULT_PARAMS, type LofiParams } from "@/lib/lofi/engine";
+import { cn } from "@/lib/utils";
+
+function getWarmthLabel(cutoff: number): string {
+  if (cutoff < 1000) {
+    return "warm";
+  }
+  if (cutoff < 2500) {
+    return "balanced";
+  }
+  return "bright";
+}
+
+interface LofiControlsProps {
+  className?: string;
+  onParamsChange: (p: Partial<LofiParams>) => void;
+  params: LofiParams;
+  presetName?: string;
+  sectionName?: string;
+  songKey?: string;
+}
+
+const SLIDER_CLASS =
+  "[&_[data-slot=slider-track]]:bg-white/20 [&_[data-slot=slider-range]]:bg-white/40 [&_[data-slot=slider-thumb]]:border-white/30 [&_[data-slot=slider-thumb]]:bg-white [&_[data-slot=slider-thumb]]:shadow-[0_0_8px_rgba(255,255,255,0.3)]";
+
+export function LofiControls({
+  params,
+  onParamsChange,
+  className,
+  presetName,
+  sectionName,
+  songKey,
+}: LofiControlsProps) {
+  const p = { ...DEFAULT_PARAMS, ...params };
+  const info = [presetName, sectionName, songKey].filter(Boolean).join(" · ");
+  return (
+    <div
+      className={cn(
+        "w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-4 backdrop-blur-xl sm:px-6",
+        className
+      )}
+    >
+      {info && (
+        <p className="mb-3 truncate font-comfortaa font-light text-white/40 text-xs lowercase tracking-wide">
+          {info}
+        </p>
+      )}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-6">
+        <Control
+          className={SLIDER_CLASS}
+          label="volume"
+          onChange={(v) => onParamsChange({ volume: v / 100 })}
+          sliderValue={[p.volume * 100]}
+          value={`${Math.round(p.volume * 100)}%`}
+        />
+        <Control
+          className={SLIDER_CLASS}
+          label="tempo"
+          onChange={(v) =>
+            onParamsChange({ tempo: Math.round(60 + (v / 100) * 30) })
+          }
+          sliderValue={[((p.tempo - 60) / 30) * 100]}
+          value={`${p.tempo} bpm`}
+        />
+        <Control
+          className={SLIDER_CLASS}
+          label="warmth"
+          onChange={(v) =>
+            onParamsChange({
+              filterCutoff: Math.round(200 + (v / 100) * 4800),
+            })
+          }
+          sliderValue={[((p.filterCutoff - 200) / 4800) * 100]}
+          value={getWarmthLabel(p.filterCutoff)}
+        />
+        <Control
+          className={SLIDER_CLASS}
+          label="space"
+          onChange={(v) => onParamsChange({ reverbMix: v / 100 })}
+          sliderValue={[p.reverbMix * 100]}
+          value={`${Math.round(p.reverbMix * 100)}%`}
+        />
+        <Control
+          className={SLIDER_CLASS}
+          label="echo"
+          onChange={(v) => onParamsChange({ delayMix: v / 100 })}
+          sliderValue={[p.delayMix * 100]}
+          value={`${Math.round(p.delayMix * 100)}%`}
+        />
+        <Control
+          className={SLIDER_CLASS}
+          label="crackle"
+          onChange={(v) => onParamsChange({ crackleMix: v / 100 })}
+          sliderValue={[p.crackleMix * 100]}
+          value={`${Math.round(p.crackleMix * 100)}%`}
+        />
+      </div>
+    </div>
+  );
+}
+
+function Control({
+  label,
+  value,
+  onChange,
+  sliderValue,
+  className,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: number) => void;
+  sliderValue: number[];
+  className?: string;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      <div className="flex shrink-0 items-center justify-between gap-2 font-comfortaa font-light text-[13px] text-white/70 lowercase tracking-wide">
+        <span className="truncate">{label}</span>
+        <span className="shrink-0 whitespace-nowrap">{value}</span>
+      </div>
+      <Slider
+        className={className}
+        max={100}
+        min={0}
+        onValueChange={(v) => onChange(v[0] ?? 0)}
+        step={1}
+        value={sliderValue}
+      />
+    </div>
+  );
+}
