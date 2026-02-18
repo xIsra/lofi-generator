@@ -104,13 +104,7 @@ function LofiGenerator() {
         ],
       });
       navigator.mediaSession.playbackState = "playing";
-      if ("setPositionState" in navigator.mediaSession) {
-        navigator.mediaSession.setPositionState({
-          duration: Number.POSITIVE_INFINITY,
-          playbackRate: 1,
-          position: 0,
-        });
-      }
+      // Omit setPositionState for infinite duration—iOS Chrome requires finite double
     }
   }, [isPlaying, params]);
 
@@ -125,9 +119,6 @@ function LofiGenerator() {
   useEffect(() => {
     if ("mediaSession" in navigator && !isPlaying) {
       navigator.mediaSession.playbackState = "none";
-      if ("setPositionState" in navigator.mediaSession) {
-        navigator.mediaSession.setPositionState({});
-      }
     }
   }, [isPlaying]);
 
@@ -149,8 +140,28 @@ function LofiGenerator() {
     };
   }, []);
 
+  // iOS: resume audio context when returning from lockscreen/background
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (
+        document.visibilityState === "visible" &&
+        isPlaying &&
+        engineRef.current
+      ) {
+        const ctx = getContext();
+        const raw = ctx.rawContext as AudioContext;
+        if (raw.state === "suspended" || raw.state === "interrupted") {
+          raw.resume();
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [isPlaying]);
+
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-between overflow-hidden bg-[#0a0a1a] font-comfortaa">
+    <div className="relative flex min-h-dvh min-h-screen flex-col items-center justify-between overflow-y-auto overflow-x-hidden overscroll-none bg-[#0a0a1a] font-comfortaa">
       <AuroraCanvas className="pointer-events-none" tempo={params.tempo} />
       <div className="relative z-10 flex w-full max-w-6xl flex-1 flex-col items-center justify-center gap-8 px-4 py-8 sm:gap-12 sm:py-12">
         <h1 className="font-extralight text-5xl text-white/90 lowercase tracking-wide sm:text-7xl">
@@ -171,7 +182,7 @@ function LofiGenerator() {
         <div className="flex items-center gap-4">
           <button
             aria-label={isPlaying ? "Pause" : "Play"}
-            className="flex size-20 items-center justify-center rounded-full border border-white/20 bg-white/10 shadow-[0_0_24px_rgba(255,255,255,0.1)] backdrop-blur-md transition-all hover:bg-white/15 hover:shadow-[0_0_32px_rgba(255,255,255,0.15)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+            className="flex size-16 touch-manipulation items-center justify-center rounded-full border border-white/20 bg-white/10 shadow-[0_0_24px_rgba(255,255,255,0.1)] backdrop-blur-md transition-all hover:bg-white/15 hover:shadow-[0_0_32px_rgba(255,255,255,0.15)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 active:scale-95 min-[480px]:size-20"
             onClick={handlePlayPause}
             type="button"
           >
@@ -194,7 +205,7 @@ function LofiGenerator() {
           </button>
           <button
             aria-label="Random song"
-            className="flex size-12 items-center justify-center rounded-full border border-white/20 bg-white/10 shadow-[0_0_24px_rgba(255,255,255,0.05)] backdrop-blur-md transition-all hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 disabled:opacity-50"
+            className="flex size-12 touch-manipulation items-center justify-center rounded-full border border-white/20 bg-white/10 shadow-[0_0_24px_rgba(255,255,255,0.05)] backdrop-blur-md transition-all hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 active:scale-95 disabled:opacity-50"
             disabled={!isPlaying}
             onClick={handleRandomize}
             type="button"
@@ -213,7 +224,10 @@ function LofiGenerator() {
           songKey={songInfo.key}
         />
       </div>
-      <p className="relative z-10 pb-6 font-comfortaa font-light text-white/40 text-xs lowercase tracking-wide">
+      <p
+        className="relative z-10 font-comfortaa font-light text-white/40 text-xs lowercase tracking-wide"
+        style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))" }}
+      >
         created by{" "}
         <a
           className="transition-colors hover:text-white/70"

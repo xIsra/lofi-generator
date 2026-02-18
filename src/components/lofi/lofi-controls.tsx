@@ -120,7 +120,7 @@ export function LofiControls({
         />
       </div>
       <Collapsible className="group/collapse mt-4">
-        <CollapsibleTrigger className="flex w-full items-center gap-1.5 rounded-md py-2 font-comfortaa font-light text-[13px] text-white/60 lowercase tracking-wide hover:text-white/80">
+        <CollapsibleTrigger className="flex min-h-11 w-full touch-manipulation items-center gap-1.5 rounded-md py-2 font-comfortaa font-light text-[13px] text-white/60 lowercase tracking-wide hover:text-white/80">
           instruments
           <ChevronDownIcon className="size-4 shrink-0 text-white/40 transition-transform group-data-[state=open]/collapse:rotate-180" />
         </CollapsibleTrigger>
