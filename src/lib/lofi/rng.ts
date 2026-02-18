@@ -38,7 +38,9 @@ export class Rng {
     let r = this.next() * total;
     for (let i = 0; i < items.length; i++) {
       r -= weights[i];
-      if (r <= 0) return items[i];
+      if (r <= 0) {
+        return items[i];
+      }
     }
     return items[items.length - 1];
   }
@@ -62,7 +64,9 @@ export class Rng {
   gaussian(mean: number, stddev: number): number {
     const u1 = this.next();
     const u2 = this.next();
-    if (u1 < 1e-10) return mean;
+    if (u1 < 1e-10) {
+      return mean;
+    }
     const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
     return mean + stddev * z;
   }

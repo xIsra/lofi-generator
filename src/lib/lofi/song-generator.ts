@@ -639,8 +639,13 @@ function generateExtraInstrument(
         ? `${sectionStartBar + bar}:${beat}:${rem}`
         : `${sectionStartBar + bar}:0:0`;
       const baseVel =
-        instrumentId === "guitar" ? 0.45 : instrumentId === "violin" ? 0.38 : 0.4;
-      const vel = baseVel + (instrumentId === "guitar" ? rng.gaussian(0, 0.04) : 0);
+        instrumentId === "guitar"
+          ? 0.45
+          : instrumentId === "violin"
+            ? 0.38
+            : 0.4;
+      const vel =
+        baseVel + (instrumentId === "guitar" ? rng.gaussian(0, 0.04) : 0);
       events.push({
         time,
         note: midiToName(midi),
@@ -682,9 +687,7 @@ function generateDrums(
       const time = `${sectionStartBar + bar}:${Math.floor(step / 4)}:${step % 4}`;
 
       if (pat.kick[step] > 0 && (!thinOut || rng.chance(1 - thinProb))) {
-        const v =
-          pat.kick[step] *
-          (preset.kickVolume / -6);
+        const v = pat.kick[step] * (preset.kickVolume / -6);
         events.push({
           time,
           instrument: "kick",
@@ -692,9 +695,7 @@ function generateDrums(
         });
       }
       if (pat.snare[step] > 0 && (!thinOut || rng.chance(1 - thinProb))) {
-        const v =
-          pat.snare[step] *
-          (1 + preset.snareVolume / 20);
+        const v = pat.snare[step] * (1 + preset.snareVolume / 20);
         events.push({
           time,
           instrument: "snare",
@@ -702,9 +703,7 @@ function generateDrums(
         });
       }
       if (pat.hihat[step] > 0) {
-        const v =
-          pat.hihat[step] *
-          (1 + preset.hihatVolume / 20);
+        const v = pat.hihat[step] * (1 + preset.hihatVolume / 20);
         events.push({
           time,
           instrument: "hihat",

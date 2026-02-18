@@ -1,59 +1,59 @@
 /** 16 steps per bar (16ths), velocity 0-1 */
 export interface DrumPattern {
+  hihat: number[];
   kick: number[];
   snare: number[];
-  hihat: number[];
 }
 
 /** [degree, quality] - degree is 1-based scale degree */
 export type ChordProgressionTemplate = [number, string][];
 
 export interface LofiPreset {
+  bass: { options: Record<string, unknown>; volume: number };
+  /** Bars per chord (1 = 1 chord/bar, 2 = 1 chord/2 bars) */
+  chordDurationBars?: number;
+  /** Chord voicing: "block" | "broken" | "arpeggio" | "spread" - can be array for variety */
+  chordVoicing?: ("block" | "broken" | "arpeggio" | "spread")[];
+  crackleMix: number;
+  delayFeedback: number;
+  delayMix: number;
+  delayTime: string;
+  drumFills: DrumPattern[];
+
+  drumPatterns: DrumPattern[];
+  /** Extra instruments with spawn probability per section */
+  extraInstruments?: { id: string; probability: number }[];
+  filterCutoff: number;
+  hihatVolume: number;
+
+  keys: string[];
+  kickVolume: number;
+  melody: {
+    synthType: "Synth" | "FMSynth" | "AMSynth";
+    options: Record<string, unknown>;
+    volume: number;
+  };
+  melodyRestProbability: number;
+  motifLength: [number, number];
   name: string;
-  tempoRange: [number, number];
-  swing: number;
 
   pad: {
     synthType: "FMSynth" | "AMSynth" | "Synth";
     options: Record<string, unknown>;
     volume: number;
   };
-  melody: {
-    synthType: "Synth" | "FMSynth" | "AMSynth";
-    options: Record<string, unknown>;
-    volume: number;
-  };
-  bass: { options: Record<string, unknown>; volume: number };
-
-  drumPatterns: DrumPattern[];
-  drumFills: DrumPattern[];
-  kickVolume: number;
-  snareVolume: number;
-  hihatVolume: number;
+  progressions: ChordProgressionTemplate[];
 
   reverbDecay: number;
   reverbMix: number;
-  delayTime: string;
-  delayFeedback: number;
-  delayMix: number;
-  filterCutoff: number;
-  crackleMix: number;
-
-  keys: string[];
-  progressions: ChordProgressionTemplate[];
   scaleType: string;
-  melodyRestProbability: number;
-  motifLength: [number, number];
-  /** Bars per chord (1 = 1 chord/bar, 2 = 1 chord/2 bars) */
-  chordDurationBars?: number;
-  /** Use triads (maj/min) instead of 7ths for softer sound */
-  useSoftVoicings?: boolean;
-  /** Chord voicing: "block" | "broken" | "arpeggio" | "spread" - can be array for variety */
-  chordVoicing?: ("block" | "broken" | "arpeggio" | "spread")[];
+  snareVolume: number;
   /** Occasional sus chord substitute (0-1, prob to swap 3rd for sus) */
   susChordProbability?: number;
-  /** Extra instruments with spawn probability per section */
-  extraInstruments?: { id: string; probability: number }[];
+  swing: number;
+  tempoRange: [number, number];
+  /** Use triads (maj/min) instead of 7ths for softer sound */
+  useSoftVoicings?: boolean;
 }
 
 function pattern(

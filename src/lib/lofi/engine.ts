@@ -1,5 +1,9 @@
 /* biome-ignore lint/performance/noNamespaceImport: Tone.js API designed for namespace import */
 import * as Tone from "tone";
+import {
+  Instruments,
+  type InstrumentVolumeId,
+} from "./instruments";
 import type {
   DrumEvent,
   GeneratedSong,
@@ -7,22 +11,7 @@ import type {
 } from "./song-generator";
 import { generateSong } from "./song-generator";
 
-export const INSTRUMENT_IDS = [
-  "pad",
-  "melody",
-  "bass",
-  "subbass",
-  "texture",
-  "piano",
-  "violin",
-  "trumpet",
-  "guitar",
-  "contrabass",
-  "kick",
-  "snare",
-  "hihat",
-] as const;
-export type InstrumentVolumeId = (typeof INSTRUMENT_IDS)[number];
+export { INSTRUMENT_IDS, type InstrumentVolumeId } from "./instruments";
 
 export interface LofiParams {
   crackleMix: number;
@@ -54,21 +43,7 @@ export const DEFAULT_PARAMS: LofiParams = {
 
 export class LofiEngine {
   private readonly transport: ReturnType<typeof Tone.getTransport>;
-  private readonly pad: InstanceType<typeof Tone.PolySynth>;
-  private readonly melody: InstanceType<
-    typeof Tone.Synth | typeof Tone.FMSynth | typeof Tone.AMSynth
-  >;
-  private readonly bass: InstanceType<typeof Tone.MonoSynth>;
-  private readonly subbass: InstanceType<typeof Tone.MonoSynth>;
-  private readonly texture: InstanceType<typeof Tone.Synth>;
-  private readonly piano: InstanceType<typeof Tone.PolySynth>;
-  private readonly violin: InstanceType<typeof Tone.PolySynth>;
-  private readonly trumpet: InstanceType<typeof Tone.PolySynth>;
-  private readonly guitar: InstanceType<typeof Tone.PluckSynth>;
-  private readonly contrabass: InstanceType<typeof Tone.MonoSynth>;
-  private readonly kick: InstanceType<typeof Tone.MembraneSynth>;
-  private readonly snare: InstanceType<typeof Tone.NoiseSynth>;
-  private readonly hihat: InstanceType<typeof Tone.NoiseSynth>;
+  private readonly instruments: Instruments;
   private readonly crackle: InstanceType<typeof Tone.NoiseSynth>;
   private readonly crackleBg: InstanceType<typeof Tone.Noise>;
   private readonly crackleLowpass: InstanceType<typeof Tone.Filter>;
@@ -87,7 +62,6 @@ export class LofiEngine {
   private scheduledIds: number[] = [];
   private currentSectionName = "";
   private params: LofiParams = { ...DEFAULT_PARAMS };
-  private bassBaseVolume = -5;
   private readonly masterGain: InstanceType<typeof Tone.Gain>;
 
   constructor() {
@@ -124,71 +98,6 @@ export class LofiEngine {
       rolloff: -12,
     }).connect(this.reverb);
 
-    this.pad = new Tone.PolySynth(Tone.FMSynth, {
-      harmonicity: 2,
-      modulationIndex: 1.8,
-      oscillator: { type: "sine" },
-      envelope: { attack: 0.45, decay: 0.25, sustain: 0.55, release: 1.6 },
-      volume: -14,
-    }).connect(this.filter);
-
-    this.melody = new Tone.Synth({
-      oscillator: { type: "triangle" },
-      envelope: { attack: 0.01, decay: 0.1, sustain: 0.4, release: 0.3 },
-    }).connect(this.filter);
-
-    this.bass = new Tone.MonoSynth({
-      oscillator: { type: "sine" },
-      envelope: { attack: 0.01, decay: 0.2, sustain: 0.5, release: 0.5 },
-    }).connect(this.filter);
-
-    this.texture = new Tone.Synth({
-      oscillator: { type: "sine" },
-      envelope: { attack: 0.1, decay: 0.4, sustain: 0.2, release: 0.8 },
-      volume: -14,
-    }).connect(this.filter);
-
-    this.subbass = new Tone.MonoSynth({
-      oscillator: { type: "sine" },
-      envelope: { attack: 0.01, decay: 0.2, sustain: 0.8, release: 0.4 },
-      volume: -6,
-    }).connect(this.filter);
-
-    this.piano = new Tone.PolySynth(Tone.FMSynth, {
-      harmonicity: 3,
-      modulationIndex: 2,
-      oscillator: { type: "sine" },
-      envelope: { attack: 0.01, decay: 0.3, sustain: 0.4, release: 0.8 },
-      volume: -5,
-    }).connect(this.filter);
-
-    this.violin = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: "triangle" },
-      envelope: { attack: 0.35, decay: 0.25, sustain: 0.5, release: 1.2 },
-      volume: -14,
-    }).connect(this.filter);
-
-    this.trumpet = new Tone.PolySynth(Tone.FMSynth, {
-      harmonicity: 2,
-      modulationIndex: 3,
-      oscillator: { type: "sine" },
-      envelope: { attack: 0.02, decay: 0.2, sustain: 0.5, release: 0.4 },
-      volume: -6,
-    }).connect(this.filter);
-
-    this.guitar = new Tone.PluckSynth({
-      attackNoise: 0.5,
-      dampening: 3000,
-      resonance: 0.7,
-      volume: -5,
-    }).connect(this.filter);
-
-    this.contrabass = new Tone.MonoSynth({
-      oscillator: { type: "triangle" },
-      envelope: { attack: 0.05, decay: 0.3, sustain: 0.5, release: 0.6 },
-      volume: -7,
-    }).connect(this.filter);
-
     this.drumFilter = new Tone.Filter({
       frequency: 1200,
       type: "lowpass",
@@ -199,12 +108,6 @@ export class LofiEngine {
       threshold: -20,
       ratio: 3,
     }).connect(this.drumFilter);
-
-    this.kick = new Tone.MembraneSynth({
-      envelope: { attack: 0.01, decay: 0.3, sustain: 0 },
-      octaves: 4,
-      pitchDecay: 0.05,
-    }).connect(this.drumComp);
 
     this.snareFilter = new Tone.Filter({
       frequency: 1200,
@@ -220,17 +123,12 @@ export class LofiEngine {
       rolloff: -12,
     }).connect(this.drumComp);
 
-    this.snare = new Tone.NoiseSynth({
-      noise: { type: "pink" },
-      envelope: { attack: 0.002, decay: 0.22, sustain: 0 },
-      volume: 0,
-    }).connect(this.snareFilter);
-
-    this.hihat = new Tone.NoiseSynth({
-      noise: { type: "white" },
-      envelope: { attack: 0.001, decay: 0.04, sustain: 0 },
-      volume: -5,
-    }).connect(this.hihatFilter);
+    this.instruments = new Instruments({
+      filter: this.filter,
+      drumComp: this.drumComp,
+      snareFilter: this.snareFilter,
+      hihatFilter: this.hihatFilter,
+    });
 
     const crackleFilter = new Tone.Filter({
       frequency: 3200,
@@ -277,15 +175,7 @@ export class LofiEngine {
     this.currentSectionName = "";
     this.transport.stop();
     this.crackleBg.stop();
-    this.pad.releaseAll();
-    this.melody.triggerRelease();
-    this.bass.triggerRelease();
-    this.subbass.triggerRelease();
-    this.contrabass.triggerRelease();
-    this.texture.triggerRelease();
-    this.piano.releaseAll();
-    this.violin.releaseAll();
-    this.trumpet.releaseAll();
+    this.instruments.releaseAll();
     this.start(Date.now());
   }
 
@@ -294,63 +184,12 @@ export class LofiEngine {
     this.crackleBg.stop();
     this.masterGain.gain.cancelScheduledValues(0);
     this.masterGain.gain.value = 0;
-    this.pad.releaseAll();
-    this.melody.triggerRelease();
-    this.bass.triggerRelease();
-    this.subbass.triggerRelease();
-    this.contrabass.triggerRelease();
-    this.texture.triggerRelease();
-    this.piano.releaseAll();
-    this.violin.releaseAll();
-    this.trumpet.releaseAll();
-    this.guitar.triggerRelease();
+    this.instruments.releaseAll();
   }
 
   setParams(p: Partial<LofiParams>): void {
     this.params = { ...this.params, ...p };
     this.applyParamOverrides();
-  }
-
-  private readonly baseVolumes: Record<InstrumentVolumeId, number> = {
-    pad: -14,
-    melody: 0,
-    bass: -5,
-    subbass: -6,
-    texture: -14,
-    piano: -5,
-    violin: -14,
-    trumpet: -6,
-    guitar: -5,
-    contrabass: -7,
-    kick: 0,
-    snare: 0,
-    hihat: -5,
-  };
-
-  private applyInstrumentVolumes(): void {
-    const vols = this.params.instrumentVolumes ?? {};
-    const dbFromSlider = (v: number) => (v / 100 - 1) * 24;
-    const set = (
-      id: InstrumentVolumeId,
-      synth: { volume: { value: number } }
-    ) => {
-      const base = id === "bass" ? this.bassBaseVolume : this.baseVolumes[id];
-      const slider = vols[id] ?? 100;
-      synth.volume.value = base + dbFromSlider(slider);
-    };
-    set("pad", this.pad);
-    set("melody", this.melody);
-    set("bass", this.bass);
-    set("subbass", this.subbass);
-    set("texture", this.texture);
-    set("piano", this.piano);
-    set("violin", this.violin);
-    set("trumpet", this.trumpet);
-    set("guitar", this.guitar);
-    set("contrabass", this.contrabass);
-    set("kick", this.kick);
-    set("snare", this.snare);
-    set("hihat", this.hihat);
   }
 
   private applyParamOverrides(): void {
@@ -361,7 +200,7 @@ export class LofiEngine {
     this.drumReverb.wet.value = this.params.reverbMix * 0.9;
     this.delay.wet.value = this.params.delayMix;
     this.crackleGain.gain.value = this.params.crackleMix;
-    this.applyInstrumentVolumes();
+    this.instruments.applyVolumes(this.params.instrumentVolumes ?? {});
     if (this.masterGain.gain.value > 0) {
       this.masterGain.gain.value = this.params.volume;
     }
@@ -390,19 +229,7 @@ export class LofiEngine {
     this.stop();
     this.clearScheduled();
     this.currentSong = null;
-    this.pad.dispose();
-    this.melody.dispose();
-    this.bass.dispose();
-    this.subbass.dispose();
-    this.texture.dispose();
-    this.piano.dispose();
-    this.violin.dispose();
-    this.trumpet.dispose();
-    this.guitar.dispose();
-    this.contrabass.dispose();
-    this.kick.dispose();
-    this.snare.dispose();
-    this.hihat.dispose();
+    this.instruments.dispose();
     this.crackle.dispose();
     this.crackleBg.dispose();
     this.crackleLowpass.dispose();
@@ -426,12 +253,8 @@ export class LofiEngine {
   }
 
   private configureSynths(song: GeneratedSong): void {
-    const { preset } = song;
-    this.pad.set(preset.pad.options as object);
-    this.melody.set(preset.melody.options as object);
-    this.bass.set(preset.bass.options as object);
-    this.bassBaseVolume = preset.bass.volume - 3;
-    this.applyInstrumentVolumes();
+    this.instruments.configurePreset(song.preset);
+    this.instruments.applyVolumes(this.params.instrumentVolumes ?? {});
   }
 
   private configureFX(fx: GeneratedSong["fxParams"]): void {
@@ -455,30 +278,7 @@ export class LofiEngine {
     this.masterGain.gain.cancelScheduledValues(0);
     this.masterGain.gain.value = this.params.volume;
 
-    const synths: Record<
-      string,
-      | typeof this.pad
-      | typeof this.melody
-      | typeof this.bass
-      | typeof this.texture
-      | typeof this.subbass
-      | typeof this.piano
-      | typeof this.violin
-      | typeof this.trumpet
-      | typeof this.guitar
-      | typeof this.contrabass
-    > = {
-      pad: this.pad,
-      melody: this.melody,
-      bass: this.bass,
-      texture: this.texture,
-      subbass: this.subbass,
-      contrabass: this.contrabass,
-      piano: this.piano,
-      violin: this.violin,
-      trumpet: this.trumpet,
-      guitar: this.guitar,
-    };
+    const synths = this.instruments.getMelodicSynths();
 
     /** Batch all events by time so we schedule once per time (Tone requires strictly increasing times) */
     const eventsByTime = new Map<
@@ -514,7 +314,7 @@ export class LofiEngine {
         if (padEvents.length > 0) {
           const dur = padEvents[0].duration;
           for (const e of padEvents) {
-            this.pad.triggerAttackRelease(e.note, dur, t, e.velocity);
+            this.instruments.pad.triggerAttackRelease(e.note, dur, t, e.velocity);
           }
         }
         for (const e of instrument) {
@@ -526,14 +326,13 @@ export class LofiEngine {
             synth.triggerAttackRelease(e.note, e.duration, t, e.velocity);
           }
         }
+        const drumSynths = {
+          kick: this.instruments.kick,
+          snare: this.instruments.snare,
+          hihat: this.instruments.hihat,
+        };
         for (const d of drum) {
-          const drumSynth =
-            d.instrument === "kick"
-              ? this.kick
-              : // biome-ignore lint/style/noNestedTernary: TODO: fix this
-                d.instrument === "snare"
-                ? this.snare
-                : this.hihat;
+          const drumSynth = drumSynths[d.instrument];
           if (d.instrument === "kick") {
             drumSynth.triggerAttackRelease("C2", "8n", t, d.velocity);
           } else {
@@ -586,15 +385,7 @@ export class LofiEngine {
       this.transport.stop();
       this.clearScheduled();
       this.crackleBg.stop();
-      this.pad.releaseAll();
-      this.melody.triggerRelease();
-      this.bass.triggerRelease();
-      this.subbass.triggerRelease();
-      this.contrabass.triggerRelease();
-      this.texture.triggerRelease();
-      this.piano.releaseAll();
-      this.violin.releaseAll();
-      this.trumpet.releaseAll();
+      this.instruments.releaseAll();
       this.currentSong = null;
       this.currentSectionName = "";
 
