@@ -1,17 +1,13 @@
 /* biome-ignore lint/performance/noNamespaceImport: Tone.js API designed for namespace import */
 import * as Tone from "tone";
-import {
-  Instruments,
-  type InstrumentVolumeId,
-} from "./instruments";
+import { Instruments, type InstrumentVolumeId } from "./instruments";
+import { Mixer } from "./mixer";
 import type {
   DrumEvent,
   GeneratedSong,
   InstrumentNoteEvent,
 } from "./song-generator";
 import { generateSong } from "./song-generator";
-
-export { INSTRUMENT_IDS, type InstrumentVolumeId } from "./instruments";
 
 export interface LofiParams {
   crackleMix: number;
@@ -43,125 +39,30 @@ export const DEFAULT_PARAMS: LofiParams = {
 
 export class LofiEngine {
   private readonly transport: ReturnType<typeof Tone.getTransport>;
+  private readonly mixer: Mixer;
   private readonly instruments: Instruments;
-  private readonly crackle: InstanceType<typeof Tone.NoiseSynth>;
-  private readonly crackleBg: InstanceType<typeof Tone.Noise>;
-  private readonly crackleLowpass: InstanceType<typeof Tone.Filter>;
-  private readonly filter: InstanceType<typeof Tone.Filter>;
-  private readonly reverb: InstanceType<typeof Tone.Reverb>;
-  private readonly drumReverb: InstanceType<typeof Tone.Reverb>;
-  private readonly delay: InstanceType<typeof Tone.FeedbackDelay>;
-  private readonly compressor: InstanceType<typeof Tone.Compressor>;
-  private readonly crackleGain: InstanceType<typeof Tone.Gain>;
-  private readonly drumComp: InstanceType<typeof Tone.Compressor>;
-  private readonly drumFilter: InstanceType<typeof Tone.Filter>;
-  private readonly snareFilter: InstanceType<typeof Tone.Filter>;
-  private readonly hihatFilter: InstanceType<typeof Tone.Filter>;
 
   private currentSong: GeneratedSong | null = null;
   private scheduledIds: number[] = [];
   private currentSectionName = "";
   private params: LofiParams = { ...DEFAULT_PARAMS };
-  private readonly masterGain: InstanceType<typeof Tone.Gain>;
 
   constructor() {
     this.transport = Tone.getTransport();
-    this.masterGain = new Tone.Gain(1).toDestination();
-    this.compressor = new Tone.Compressor({
-      threshold: -32,
-      ratio: 10,
-      attack: 0.1,
-      release: 0.5,
-    }).connect(this.masterGain);
-
-    this.delay = new Tone.FeedbackDelay({
-      delayTime: "4n",
-      feedback: 0.35,
-      wet: 0.15,
-    }).connect(this.compressor);
-
-    this.reverb = new Tone.Reverb({
-      decay: 4,
-      preDelay: 0.02,
-      wet: 0.4,
-    }).connect(this.delay);
-
-    this.drumReverb = new Tone.Reverb({
-      decay: 3,
-      preDelay: 0.01,
-      wet: 0.35,
-    }).connect(this.compressor);
-
-    this.filter = new Tone.Filter({
-      frequency: 1200,
-      type: "lowpass",
-      rolloff: -12,
-    }).connect(this.reverb);
-
-    this.drumFilter = new Tone.Filter({
-      frequency: 1200,
-      type: "lowpass",
-      rolloff: -12,
-    }).connect(this.drumReverb);
-
-    this.drumComp = new Tone.Compressor({
-      threshold: -20,
-      ratio: 3,
-    }).connect(this.drumFilter);
-
-    this.snareFilter = new Tone.Filter({
-      frequency: 1200,
-      type: "bandpass",
-      Q: 2,
-      rolloff: -12,
-    }).connect(this.drumComp);
-
-    this.hihatFilter = new Tone.Filter({
-      frequency: 3200,
-      type: "bandpass",
-      Q: 1.2,
-      rolloff: -12,
-    }).connect(this.drumComp);
-
-    this.instruments = new Instruments({
-      filter: this.filter,
-      drumComp: this.drumComp,
-      snareFilter: this.snareFilter,
-      hihatFilter: this.hihatFilter,
-    });
-
-    const crackleFilter = new Tone.Filter({
-      frequency: 3200,
-      type: "bandpass",
-      Q: 0.6,
-    });
-    this.crackleLowpass = new Tone.Filter({
-      frequency: 2200,
-      type: "lowpass",
-      rolloff: -12,
-    }).connect(crackleFilter);
-    this.crackleGain = new Tone.Gain(0.08).connect(this.compressor);
-    crackleFilter.connect(this.crackleGain);
-    this.crackleBg = new Tone.Noise({ type: "white", volume: -28 }).connect(
-      this.crackleLowpass
-    );
-    this.crackle = new Tone.NoiseSynth({
-      noise: { type: "pink" },
-      envelope: { attack: 0.001, decay: 0.04, sustain: 0 },
-      volume: -12,
-    }).connect(crackleFilter);
+    this.mixer = new Mixer();
+    this.instruments = new Instruments(this.mixer.destinations);
   }
 
   async init(): Promise<void> {
-    await Promise.all([this.reverb.ready, this.drumReverb.ready]);
+    await this.mixer.ready;
   }
 
   async start(seed?: number): Promise<void> {
     await Tone.start();
     if (this.currentSong && seed === undefined) {
-      this.masterGain.gain.cancelScheduledValues(0);
-      this.masterGain.gain.value = this.params.volume;
-      this.crackleBg.start();
+      this.mixer.cancelVolumeScheduled();
+      this.mixer.setVolume(this.params.volume);
+      this.mixer.crackleBg.start();
       this.transport.start();
       return;
     }
@@ -174,16 +75,16 @@ export class LofiEngine {
     this.currentSong = null;
     this.currentSectionName = "";
     this.transport.stop();
-    this.crackleBg.stop();
+    this.mixer.crackleBg.stop();
     this.instruments.releaseAll();
     this.start(Date.now());
   }
 
   stop(): void {
     this.transport.stop();
-    this.crackleBg.stop();
-    this.masterGain.gain.cancelScheduledValues(0);
-    this.masterGain.gain.value = 0;
+    this.mixer.crackleBg.stop();
+    this.mixer.cancelVolumeScheduled();
+    this.mixer.setVolume(0);
     this.instruments.releaseAll();
   }
 
@@ -194,20 +95,18 @@ export class LofiEngine {
 
   private applyParamOverrides(): void {
     this.transport.bpm.value = this.params.tempo;
-    this.filter.frequency.value = this.params.filterCutoff;
-    this.drumFilter.frequency.value = this.params.filterCutoff;
-    this.reverb.wet.value = this.params.reverbMix;
-    this.drumReverb.wet.value = this.params.reverbMix * 0.9;
-    this.delay.wet.value = this.params.delayMix;
-    this.crackleGain.gain.value = this.params.crackleMix;
+    this.mixer.applyParams({
+      filterCutoff: this.params.filterCutoff,
+      reverbMix: this.params.reverbMix,
+      delayMix: this.params.delayMix,
+      crackleMix: this.params.crackleMix,
+      volume: this.params.volume,
+    });
     this.instruments.applyVolumes(this.params.instrumentVolumes ?? {});
-    if (this.masterGain.gain.value > 0) {
-      this.masterGain.gain.value = this.params.volume;
-    }
   }
 
   connectAnalyser(analyser: AnalyserNode): void {
-    this.masterGain.connect(analyser);
+    this.mixer.connectAnalyser(analyser);
   }
 
   getCurrentInfo(): {
@@ -230,19 +129,7 @@ export class LofiEngine {
     this.clearScheduled();
     this.currentSong = null;
     this.instruments.dispose();
-    this.crackle.dispose();
-    this.crackleBg.dispose();
-    this.crackleLowpass.dispose();
-    this.filter.dispose();
-    this.reverb.dispose();
-    this.drumReverb.dispose();
-    this.delay.dispose();
-    this.compressor.dispose();
-    this.crackleGain.dispose();
-    this.drumComp.dispose();
-    this.snareFilter.dispose();
-    this.hihatFilter.dispose();
-    this.masterGain.dispose();
+    this.mixer.dispose();
   }
 
   private clearScheduled(): void {
@@ -258,14 +145,12 @@ export class LofiEngine {
   }
 
   private configureFX(fx: GeneratedSong["fxParams"]): void {
-    this.reverb.decay = fx.reverbDecay;
-    this.reverb.wet.value = fx.reverbMix;
-    this.drumReverb.decay = fx.reverbDecay * 0.85;
-    this.drumReverb.wet.value = fx.reverbMix * 0.9;
-    this.delay.wet.value = fx.delayMix;
-    this.filter.frequency.value = fx.filterCutoff;
-    this.drumFilter.frequency.value = fx.filterCutoff;
-    /* crackleGain set only by user's crackle slider via applyParamOverrides */
+    this.mixer.configureFX({
+      reverbDecay: fx.reverbDecay,
+      reverbMix: fx.reverbMix,
+      delayMix: fx.delayMix,
+      filterCutoff: fx.filterCutoff,
+    });
   }
 
   private playSong(song: GeneratedSong): void {
@@ -275,8 +160,8 @@ export class LofiEngine {
     this.configureFX(song.fxParams);
     this.transport.swing = song.swing;
     this.applyParamOverrides();
-    this.masterGain.gain.cancelScheduledValues(0);
-    this.masterGain.gain.value = this.params.volume;
+    this.mixer.cancelVolumeScheduled();
+    this.mixer.setVolume(this.params.volume);
 
     const synths = this.instruments.getMelodicSynths();
 
@@ -314,7 +199,12 @@ export class LofiEngine {
         if (padEvents.length > 0) {
           const dur = padEvents[0].duration;
           for (const e of padEvents) {
-            this.instruments.pad.triggerAttackRelease(e.note, dur, t, e.velocity);
+            this.instruments.pad.triggerAttackRelease(
+              e.note,
+              dur,
+              t,
+              e.velocity
+            );
           }
         }
         for (const e of instrument) {
@@ -373,7 +263,7 @@ export class LofiEngine {
           const vel = isTick
             ? 0.2 + Math.random() * 0.35
             : 0.45 + Math.random() * 0.5;
-          this.crackle.triggerAttackRelease(dur, time, vel);
+          this.mixer.crackle.triggerAttackRelease(dur, time, vel);
         }
       },
       "32n",
@@ -384,7 +274,7 @@ export class LofiEngine {
     const nextSongId = this.transport.schedule(() => {
       this.transport.stop();
       this.clearScheduled();
-      this.crackleBg.stop();
+      this.mixer.crackleBg.stop();
       this.instruments.releaseAll();
       this.currentSong = null;
       this.currentSectionName = "";
@@ -395,7 +285,7 @@ export class LofiEngine {
     }, `${song.totalBars}:0:0`);
     this.scheduledIds.push(nextSongId);
 
-    this.crackleBg.start();
+    this.mixer.crackleBg.start();
     this.transport.start();
   }
 }

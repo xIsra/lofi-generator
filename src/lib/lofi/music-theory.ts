@@ -83,12 +83,18 @@ export function midiToName(midi: MidiNote): string {
   return `${NOTE_NAMES[noteIdx]}${octave}`;
 }
 
+const NOTE_NAME_REGEX = /^([A-G]#?)(-?\d+)$/;
+
 export function nameToMidi(name: string): MidiNote {
-  const m = name.match(/^([A-G]#?)(-?\d+)$/);
-  if (!m) return 60;
+  const m = name.match(NOTE_NAME_REGEX);
+  if (!m) {
+    return 60;
+  }
   const noteIdx = NOTE_NAMES.indexOf(m[1]);
   const octave = Number.parseInt(m[2], 10);
-  if (noteIdx === -1) return 60;
+  if (noteIdx === -1) {
+    return 60;
+  }
   return (octave + 1) * 12 + noteIdx;
 }
 
@@ -98,10 +104,12 @@ export function buildChord(rootMidi: MidiNote, quality: string): MidiNote[] {
 }
 
 export function invertChord(notes: MidiNote[], inversion: number): MidiNote[] {
-  if (inversion <= 0 || inversion >= notes.length) return [...notes];
+  if (inversion <= 0 || inversion >= notes.length) {
+    return [...notes];
+  }
   const out = [...notes];
   for (let i = 0; i < inversion; i++) {
-    out[i] = out[i] + 12;
+    out[i] += 12;
   }
   return out.sort((a, b) => a - b);
 }
@@ -149,7 +157,9 @@ export function buildScale(rootName: string, scaleType: string): number[] {
 /** Pick a neighboring key (circle of fifths distance 1-2, or relative minor/major) */
 export function pickRelatedKey(currentKey: string, rng: Rng): string {
   const idx = CIRCLE_OF_FIFTHS.indexOf(currentKey);
-  if (idx === -1) return currentKey;
+  if (idx === -1) {
+    return currentKey;
+  }
   const options: string[] = [];
   options.push(CIRCLE_OF_FIFTHS[(idx + 1) % 12]);
   options.push(CIRCLE_OF_FIFTHS[(idx - 1 + 12) % 12]);
