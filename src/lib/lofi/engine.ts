@@ -2,12 +2,8 @@
 import * as Tone from "tone";
 import { Instruments, type InstrumentVolumeId } from "./instruments";
 import { Mixer } from "./mixer";
-import type {
-  DrumEvent,
-  GeneratedSong,
-  InstrumentNoteEvent,
-} from "./song-generator";
-import { generateSong } from "./song-generator";
+import { buildSong, type Song } from "./song";
+import { SongScheduler } from "./song-scheduler";
 
 export interface LofiParams {
   crackleMix: number;
@@ -17,14 +13,6 @@ export interface LofiParams {
   reverbMix: number;
   tempo: number;
   volume: number;
-}
-
-function compareTransportTime(a: string, b: string): number {
-  const parse = (s: string) => {
-    const parts = s.split(":").map((x) => Number.parseInt(x, 10) || 0);
-    return (parts[0] ?? 0) * 16 + (parts[1] ?? 0) * 4 + (parts[2] ?? 0);
-  };
-  return parse(a) - parse(b);
 }
 
 export const DEFAULT_PARAMS: LofiParams = {
@@ -41,8 +29,9 @@ export class LofiEngine {
   private readonly transport: ReturnType<typeof Tone.getTransport>;
   private readonly mixer: Mixer;
   private readonly instruments: Instruments;
+  private readonly scheduler: SongScheduler;
 
-  private currentSong: GeneratedSong | null = null;
+  private currentSong: Song | null = null;
   private scheduledIds: number[] = [];
   private currentSectionName = "";
   private params: LofiParams = { ...DEFAULT_PARAMS };
@@ -51,6 +40,7 @@ export class LofiEngine {
     this.transport = Tone.getTransport();
     this.mixer = new Mixer();
     this.instruments = new Instruments(this.mixer.destinations);
+    this.scheduler = new SongScheduler(this.transport, this.instruments);
   }
 
   async init(): Promise<void> {
@@ -66,7 +56,7 @@ export class LofiEngine {
       this.transport.start();
       return;
     }
-    const song = generateSong(seed ?? Date.now());
+    const song = buildSong(seed ?? Date.now());
     this.playSong(song);
   }
 
@@ -139,12 +129,12 @@ export class LofiEngine {
     this.scheduledIds = [];
   }
 
-  private configureSynths(song: GeneratedSong): void {
+  private configureSynths(song: Song): void {
     this.instruments.configurePreset(song.preset);
     this.instruments.applyVolumes(this.params.instrumentVolumes ?? {});
   }
 
-  private configureFX(fx: GeneratedSong["fxParams"]): void {
+  private configureFX(fx: Song["fxParams"]): void {
     this.mixer.configureFX({
       reverbDecay: fx.reverbDecay,
       reverbMix: fx.reverbMix,
@@ -153,7 +143,7 @@ export class LofiEngine {
     });
   }
 
-  private playSong(song: GeneratedSong): void {
+  private playSong(song: Song): void {
     this.currentSong = song;
     this.clearScheduled();
     this.configureSynths(song);
@@ -163,127 +153,24 @@ export class LofiEngine {
     this.mixer.cancelVolumeScheduled();
     this.mixer.setVolume(this.params.volume);
 
-    const synths = this.instruments.getMelodicSynths();
-
-    /** Batch all events by time so we schedule once per time (Tone requires strictly increasing times) */
-    const eventsByTime = new Map<
-      string,
-      { instrument: InstrumentNoteEvent[]; drum: DrumEvent[] }
-    >();
-    for (const section of song.sections) {
-      for (const e of section.instrumentEvents) {
-        const entry = eventsByTime.get(e.time) ?? {
-          instrument: [],
-          drum: [],
-        };
-        entry.instrument.push(e);
-        eventsByTime.set(e.time, entry);
-      }
-      for (const e of section.drumEvents) {
-        const entry = eventsByTime.get(e.time) ?? {
-          instrument: [],
-          drum: [],
-        };
-        entry.drum.push(e);
-        eventsByTime.set(e.time, entry);
-      }
-    }
-    const sortedTimes = [...eventsByTime.keys()].sort(compareTransportTime);
-    for (const time of sortedTimes) {
-      const { instrument, drum } = eventsByTime.get(time) ?? {
-        instrument: [],
-        drum: [],
-      };
-      const id = this.transport.schedule((t) => {
-        const padEvents = instrument.filter((e) => e.instrument === "pad");
-        if (padEvents.length > 0) {
-          const dur = padEvents[0].duration;
-          for (const e of padEvents) {
-            this.instruments.pad.triggerAttackRelease(
-              e.note,
-              dur,
-              t,
-              e.velocity
-            );
-          }
-        }
-        for (const e of instrument) {
-          if (e.instrument === "pad") {
-            continue;
-          }
-          const synth = synths[e.instrument];
-          if (synth) {
-            synth.triggerAttackRelease(e.note, e.duration, t, e.velocity);
-          }
-        }
-        const drumSynths = {
-          kick: this.instruments.kick,
-          snare: this.instruments.snare,
-          hihat: this.instruments.hihat,
-        };
-        for (const d of drum) {
-          const drumSynth = drumSynths[d.instrument];
-          if (d.instrument === "kick") {
-            drumSynth.triggerAttackRelease("C2", "8n", t, d.velocity);
-          } else {
-            drumSynth.triggerAttackRelease("32n", t, d.velocity);
-          }
-        }
-      }, time);
-      this.scheduledIds.push(id);
-    }
-
-    const barUpdateId = this.transport.scheduleRepeat(
-      (time) => {
-        const bpm = this.transport.bpm.value;
-        const beats = time * (bpm / 60);
-        const bar = Math.floor(beats / 4);
-        let acc = 0;
-        for (const s of song.sections) {
-          if (bar >= acc && bar < acc + s.bars) {
-            this.currentSectionName = s.name;
-            break;
-          }
-          acc += s.bars;
-        }
+    const ids = this.scheduler.schedule(song, {
+      crackle: this.mixer.crackle,
+      onBar: (name) => {
+        this.currentSectionName = name;
       },
-      "1m",
-      "0:0:0"
-    );
-    this.scheduledIds.push(barUpdateId);
-
-    const crackleId = this.transport.scheduleRepeat(
-      (time) => {
-        const r = Math.random();
-        if (r < 0.65) {
-          const isTick = r < 0.4;
-          const dur = isTick
-            ? 0.008 + Math.random() * 0.012
-            : 0.02 + Math.random() * 0.05;
-          const vel = isTick
-            ? 0.2 + Math.random() * 0.35
-            : 0.45 + Math.random() * 0.5;
-          this.mixer.crackle.triggerAttackRelease(dur, time, vel);
-        }
+      onSongEnd: () => {
+        this.transport.stop();
+        this.clearScheduled();
+        this.mixer.crackleBg.stop();
+        this.instruments.releaseAll();
+        this.currentSong = null;
+        this.currentSectionName = "";
+        const nextSong = buildSong(Date.now());
+        this.transport.position = "0:0:0";
+        this.playSong(nextSong);
       },
-      "32n",
-      "0:0:0"
-    );
-    this.scheduledIds.push(crackleId);
-
-    const nextSongId = this.transport.schedule(() => {
-      this.transport.stop();
-      this.clearScheduled();
-      this.mixer.crackleBg.stop();
-      this.instruments.releaseAll();
-      this.currentSong = null;
-      this.currentSectionName = "";
-
-      const nextSong = generateSong(Date.now());
-      this.transport.position = "0:0:0";
-      this.playSong(nextSong);
-    }, `${song.totalBars}:0:0`);
-    this.scheduledIds.push(nextSongId);
+    });
+    this.scheduledIds.push(...ids);
 
     this.mixer.crackleBg.start();
     this.transport.start();
