@@ -6,11 +6,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Slider } from "@/components/ui/slider";
-import {
-  DEFAULT_PARAMS,
-  INSTRUMENT_IDS,
-  type LofiParams,
-} from "@/lib/lofi/engine";
+import { DEFAULT_PARAMS, type LofiParams } from "@/lib/lofi/engine";
+import { INSTRUMENT_IDS } from "@/lib/lofi/instruments";
 import { cn } from "@/lib/utils";
 
 function getWarmthLabel(cutoff: number): string {
