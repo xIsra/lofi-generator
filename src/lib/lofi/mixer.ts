@@ -14,10 +14,10 @@ export interface MixerParams {
 }
 
 export interface MixerFXParams {
+  delayMix: number;
   filterCutoff: number;
   reverbDecay: number;
   reverbMix: number;
-  delayMix: number;
 }
 
 export interface MixerDestinations {

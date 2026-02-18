@@ -105,7 +105,7 @@ function LofiGenerator() {
       });
       navigator.mediaSession.playbackState = "playing";
       if ("setPositionState" in navigator.mediaSession) {
-        navigator.mediaSession.        setPositionState({
+        navigator.mediaSession.setPositionState({
           duration: Number.POSITIVE_INFINITY,
           playbackRate: 1,
           position: 0,

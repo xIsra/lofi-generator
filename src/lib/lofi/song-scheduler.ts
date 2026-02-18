@@ -1,7 +1,6 @@
 /**
  * SongScheduler schedules a Song's events to the transport, triggering Instruments.
  */
-/* biome-ignore lint/performance/noNamespaceImport: Tone.js API designed for namespace import */
 import type * as Tone from "tone";
 import type { Instruments } from "./instruments";
 import type { DrumEvent, InstrumentNoteEvent, Song } from "./song";
