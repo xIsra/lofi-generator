@@ -3,6 +3,7 @@
  */
 /* biome-ignore lint/performance/noNamespaceImport: Tone.js API designed for namespace import */
 import * as Tone from "tone";
+import { PianoInstrument } from "./instruments/piano";
 
 export type InstrumentId =
   | "pad"
@@ -62,7 +63,7 @@ export class Instruments {
   readonly bass: InstanceType<typeof Tone.MonoSynth>;
   readonly subbass: InstanceType<typeof Tone.MonoSynth>;
   readonly texture: InstanceType<typeof Tone.Synth>;
-  readonly piano: InstanceType<typeof Tone.PolySynth>;
+  readonly piano: PianoInstrument;
   readonly violin: InstanceType<typeof Tone.PolySynth>;
   readonly trumpet: InstanceType<typeof Tone.PolySynth>;
   readonly guitar: InstanceType<typeof Tone.PluckSynth>;
@@ -106,13 +107,7 @@ export class Instruments {
       volume: -6,
     }).connect(filter);
 
-    this.piano = new Tone.PolySynth(Tone.FMSynth, {
-      harmonicity: 3,
-      modulationIndex: 2,
-      oscillator: { type: "sine" },
-      envelope: { attack: 0.01, decay: 0.3, sustain: 0.4, release: 0.8 },
-      volume: -5,
-    }).connect(filter);
+    this.piano = new PianoInstrument(filter);
 
     this.violin = new Tone.PolySynth(Tone.Synth, {
       oscillator: { type: "triangle" },
@@ -221,6 +216,7 @@ export class Instruments {
     | InstanceType<typeof Tone.MonoSynth>
     | InstanceType<typeof Tone.Synth>
     | InstanceType<typeof Tone.PluckSynth>
+    | PianoInstrument
   > {
     return {
       pad: this.pad,
